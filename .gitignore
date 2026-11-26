@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Large GIS rasters / intermediates (regenerable, exceed GitHub limits)
+*.tif
+*.tiff
+*.tfw
+*.aux.xml
+*.ovr
+*.nc
+*.nc4
+processed_data/
+
+# QGIS sidecar / lock files
+*.qmd
+*.qgs~
+*.qgz~
+
+# Uncompressed copies of committed .csv.gz tables
+02_GIS_Outputs/ml_inputs/*.csv
+02_GIS_Outputs/ml_intermediate/*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

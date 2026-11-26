@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Vijayawada Flood Routing Simulation</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:#f0f2f5;color:#1e293b;height:100vh;overflow:hidden}
+
+    /* HEADER */
+    .hdr{height:48px;background:#fff;border-bottom:1px solid #e2e8f0;
+         display:flex;align-items:center;justify-content:space-between;
+         padding:0 14px;box-shadow:0 1px 3px rgba(0,0,0,.06);z-index:100}
+    .hdr-l{display:flex;align-items:center;gap:10px}
+    .hdr h1{font-size:13px;font-weight:700;color:#1e40af}
+    .tab-bar{display:flex;gap:2px;margin-left:16px}
+    .tab{padding:4px 12px;border-radius:6px;font-size:10px;font-weight:600;
+         cursor:pointer;border:1px solid transparent;color:#64748b;
+         transition:all .15s;background:transparent}
+    .tab:hover{background:#f1f5f9;color:#1e293b}
+    .tab.active{background:#1e40af;color:#fff;border-color:#1e40af}
+    .badges{display:flex;gap:6px;align-items:center}
+    .bdg{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;
+         border:1px solid #cbd5e1;background:#f8fafc;color:#475569}
+    .bdg-g{background:#f0fdf4;border-color:#86efac;color:#15803d}
+    .dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+         background:#22c55e;margin-right:3px;animation:blink 2s infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+    /* VIEWS */
+    .view{display:none;height:calc(100vh - 48px)}
+    .view.active{display:flex}
+
+    /* SIMULATION VIEW */
+    #v-sim{flex-direction:row}
+    .layout{display:grid;grid-template-columns:256px 1fr 256px;width:100%;height:100%}
+
+    /* PANELS */
+    .panel{background:#fff;overflow-y:auto;padding:10px}
+    .pl{border-right:1px solid #e2e8f0}
+    .pr{border-left:1px solid #e2e8f0}
+    .card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;
+          padding:10px;margin-bottom:9px}
+    .ctitle{font-size:9px;font-weight:700;text-transform:uppercase;
+            letter-spacing:1px;color:#94a3b8;margin-bottom:8px;
+            padding-bottom:5px;border-bottom:1px solid #e2e8f0}
+
+    /* SCENARIO BUTTONS */
+    .scgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+    .scbtn{padding:8px 3px;border-radius:7px;border:1.5px solid #e2e8f0;
+           background:#fff;cursor:pointer;font-size:9px;font-weight:600;
+           color:#64748b;text-align:center;display:flex;flex-direction:column;
+           align-items:center;gap:2px;transition:all .15s}
+    .scbtn:hover{border-color:#3b82f6;background:#eff6ff;color:#1d4ed8}
+    .scbtn.active{border-color:#2563eb;color:#1d4ed8;
+                  background:linear-gradient(135deg,#eff6ff,#dbeafe);
+                  box-shadow:0 2px 6px rgba(37,99,235,.12)}
+    .scico{font-size:14px}
+
+    /* SLIDERS */
+    .slgrp{margin-bottom:10px}
+    .sllbl{display:flex;justify-content:space-between;font-size:10px;
+           font-weight:500;color:#475569;margin-bottom:3px}
+    .slval{color:#2563eb;font-weight:700}
+    input[type=range]{width:100%;height:4px;border-radius:2px;
+                      background:#e2e8f0;-webkit-appearance:none;outline:none}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
+      width:13px;height:13px;border-radius:50%;background:#2563eb;cursor:pointer;
+      box-shadow:0 1px 3px rgba(37,99,235,.35);transition:transform .12s}
+    input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+    .runbtn{width:100%;padding:10px;background:#2563eb;color:#fff;border:none;
+            border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;
+            letter-spacing:.4px;transition:all .15s;
+            box-shadow:0 2px 6px rgba(37,99,235,.22)}
+    .runbtn:hover{background:#1d4ed8}
+    .runbtn:disabled{background:#94a3b8;cursor:not-allowed}
+
+    /* STAT CARDS */
+    .stgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+    .stcard{background:#fff;border:1px solid #e2e8f0;border-radius:7px;
+            padding:8px;text-align:center}
+    .stval{font-size:15px;font-weight:700;color:#1d4ed8}
+    .stlbl{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px}
+
+    /* MAP */
+    .mapwrap{position:relative;flex:1}
+    #map{width:100%;height:100%}
+    .loading{display:none;position:absolute;inset:0;background:rgba(248,250,252,.94);
+             z-index:3000;backdrop-filter:blur(4px);flex-direction:column;
+             align-items:center;justify-content:center;gap:12px}
+    .loading.show{display:flex}
+    .spin{width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#2563eb;
+          border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .ldtxt{font-size:13px;font-weight:700;color:#1d4ed8}
+    .ldsub{font-size:10px;color:#64748b}
+
+    /* MAP OVERLAYS */
+    .overlays{position:absolute;top:10px;right:10px;z-index:1000;
+              display:grid;grid-template-columns:1fr 1fr;gap:5px;width:272px}
+    .ov{background:rgba(255,255,255,.97);border:1px solid #e2e8f0;
+        border-radius:8px;padding:8px 10px;box-shadow:0 2px 6px rgba(0,0,0,.07)}
+    .ovlbl{font-size:8px;font-weight:700;text-transform:uppercase;
+           letter-spacing:.5px;color:#94a3b8;margin-bottom:1px}
+    .ovval{font-size:17px;font-weight:700;line-height:1.1}
+    .ovsub{font-size:8px;color:#64748b;margin-top:1px}
+    .cr{color:#dc2626}.ca{color:#d97706}.cg{color:#16a34a}.cb{color:#2563eb}
+
+    /* LEGEND */
+    .legend{position:absolute;bottom:66px;left:10px;z-index:1000;
+            background:rgba(255,255,255,.97);border:1px solid #e2e8f0;
+            border-radius:8px;padding:9px 10px;box-shadow:0 2px 6px rgba(0,0,0,.07)}
+    .legh{font-size:9px;font-weight:700;text-transform:uppercase;
+          letter-spacing:.4px;color:#475569;margin-bottom:6px}
+    .legr{display:flex;align-items:center;gap:6px;margin-bottom:4px;
+          font-size:9px;color:#475569}
+    .legr:last-child{margin-bottom:0}
+    .legln{width:20px;height:3px;border-radius:2px}
+    .legdt{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+    /* LAYER TOGGLE */
+    .layer-toggle{position:absolute;bottom:66px;right:10px;z-index:1000;
+                  background:rgba(255,255,255,.97);border:1px solid #e2e8f0;
+                  border-radius:8px;padding:9px 10px;
+                  box-shadow:0 2px 6px rgba(0,0,0,.07)}
+    .ltitle{font-size:9px;font-weight:700;color:#475569;
+            text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+    .lrow{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:9px;color:#475569}
+    .lrow:last-child{margin-bottom:0}
+    .ltog{width:28px;height:14px;border-radius:7px;background:#e2e8f0;
+          cursor:pointer;position:relative;transition:background .2s;border:none}
+    .ltog.on{background:#2563eb}
+    .ltog::after{content:'';position:absolute;width:10px;height:10px;
+                 border-radius:50%;background:#fff;top:2px;left:2px;
+                 transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+    .ltog.on::after{transform:translateX(14px)}
+
+    /* TIMELINE */
+    .tl{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.98);
+        border-top:1px solid #e2e8f0;padding:7px 13px;z-index:1000;
+        display:flex;align-items:center;gap:10px;
+        box-shadow:0 -2px 5px rgba(0,0,0,.05)}
+    .tlbtns{display:flex;gap:4px}
+    .tlbtn{width:27px;height:27px;border-radius:50%;border:1.5px solid #e2e8f0;
+           background:#f8fafc;color:#475569;cursor:pointer;font-size:10px;
+           display:flex;align-items:center;justify-content:center;transition:all .12s}
+    .tlbtn:hover{border-color:#2563eb;background:#eff6ff;color:#2563eb}
+    .tlwrap{flex:1;display:flex;flex-direction:column;gap:2px}
+    .tllabs{display:flex;justify-content:space-between;font-size:8px;color:#94a3b8}
+    .tdisp{background:#2563eb;color:#fff;padding:5px 10px;border-radius:6px;
+           font-size:12px;font-weight:700;min-width:58px;text-align:center}
+
+    /* RIGHT PANEL */
+    .chcard{background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;
+            padding:10px;margin-bottom:9px}
+    .chtitle{font-size:9px;font-weight:700;text-transform:uppercase;
+             letter-spacing:.4px;color:#94a3b8;margin-bottom:7px}
+    .sbrow{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+    .sblbl{width:38px;font-size:9px;font-weight:600;color:#475569}
+    .sbtrack{flex:1;height:7px;background:#e2e8f0;border-radius:4px;
+             position:relative;overflow:hidden}
+    .sbfill{height:100%;border-radius:4px;position:absolute;left:0;top:0;
+            transition:width .45s ease}
+    .sbpct{width:28px;font-size:9px;font-weight:700;color:#1e293b;text-align:right}
+
+    /* ANALYTICS VIEW */
+    #v-analytics{flex-direction:column;background:#f0f2f5;overflow-y:auto;padding:16px}
+    .analytics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+                    max-width:1200px;margin:0 auto;width:100%}
+    .acard{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px}
+    .acard-title{font-size:10px;font-weight:700;text-transform:uppercase;
+                 letter-spacing:.8px;color:#94a3b8;margin-bottom:10px;
+                 padding-bottom:7px;border-bottom:1px solid #f1f5f9}
+    .acard-big{grid-column:span 2}
+    .query-badge{display:inline-block;background:#eff6ff;color:#1d4ed8;
+                 border:1px solid #bfdbfe;border-radius:4px;font-size:8px;
+                 font-weight:700;padding:1px 6px;margin-bottom:6px;letter-spacing:.3px}
+    .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;
+         padding:8px;text-align:center}
+    .kpi-val{font-size:18px;font-weight:700;color:#1d4ed8}
+    .kpi-lbl{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px}
+    .feat-bar-row{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+    .feat-name{width:120px;font-size:10px;color:#475569;font-weight:500}
+    .feat-track{flex:1;height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden}
+    .feat-fill{height:100%;border-radius:4px;background:#2563eb}
+    .feat-pct{width:32px;font-size:9px;font-weight:700;color:#1e293b;text-align:right}
+    .flood-event{display:flex;align-items:flex-start;gap:8px;
+                 padding:8px 0;border-bottom:1px solid #f1f5f9}
+    .flood-event:last-child{border-bottom:none}
+    .fe-dot{width:8px;height:8px;border-radius:50%;background:#dc2626;
+            flex-shrink:0;margin-top:3px}
+    .fe-title{font-size:10px;font-weight:600;color:#1e293b}
+    .fe-desc{font-size:9px;color:#64748b;margin-top:1px}
+    .data-src{display:flex;align-items:center;gap:6px;padding:5px 0;
+              border-bottom:1px solid #f1f5f9;font-size:9px}
+    .data-src:last-child{border-bottom:none}
+    .ds-name{font-weight:600;color:#1e293b}
+    .ds-desc{color:#64748b;font-size:8px}
+
+    /* QUERY VIEW */
+    #v-queries{flex-direction:column;background:#f0f2f5;overflow-y:auto;padding:16px}
+    .q-header{max-width:1100px;margin:0 auto 14px;width:100%}
+    .q-header h2{font-size:16px;font-weight:700;color:#1e293b}
+    .q-header p{font-size:11px;color:#64748b;margin-top:3px}
+    .q-grid{display:grid;grid-template-columns:300px 1fr;gap:12px;
+            max-width:1100px;margin:0 auto;width:100%}
+    .q-list{display:flex;flex-direction:column;gap:6px}
+    .q-item{background:#fff;border:1.5px solid #e2e8f0;border-radius:9px;
+            padding:10px 12px;cursor:pointer;transition:all .15s}
+    .q-item:hover{border-color:#3b82f6;background:#eff6ff}
+    .q-item.active{border-color:#2563eb;background:#eff6ff}
+    .q-num{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;
+           letter-spacing:.4px;margin-bottom:3px}
+    .q-text{font-size:11px;font-weight:600;color:#1e293b;line-height:1.4}
+    .q-sub{font-size:9px;color:#64748b;margin-top:2px}
+    .q-answer{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px}
+    .qa-title{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:4px}
+    .qa-desc{font-size:10px;color:#64748b;margin-bottom:14px;line-height:1.5}
+    .qa-body{font-size:11px;color:#475569;line-height:1.6}
+    .ans-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+             gap:8px;margin:10px 0}
+    .ans-k{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;
+           padding:10px;text-align:center}
+    .ans-v{font-size:20px;font-weight:700;color:#1d4ed8}
+    .ans-l{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px}
+    .subq{background:#f8fafc;border-left:3px solid #3b82f6;border-radius:4px;
+          padding:8px 10px;margin:6px 0;font-size:10px;color:#475569}
+    .subq-title{font-weight:700;color:#1e293b;margin-bottom:2px}
+    .ans-tag{display:inline-block;background:#dcfce7;color:#15803d;
+             border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700;margin-left:4px}
+    .ans-tag.warn{background:#fef3c7;color:#92400e}
+    .ans-tag.info{background:#dbeafe;color:#1d4ed8}
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-track{background:#f1f5f9}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-l">
+    <h1>&#127754; Vijayawada Flood Routing Simulation</h1>
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchTab('sim',this)">&#128507; Simulation</button>
+      <button class="tab" onclick="switchTab('analytics',this)">&#128202; Analytics</button>
+      <button class="tab" onclick="switchTab('queries',this)">&#128269; Query Explorer</button>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="bdg bdg-g"><span class="dot"></span><span id="sim-status">Ready</span></span>
+    <span class="bdg">ROC-AUC: {{ stats.roc_auc }}</span>
+    <span class="bdg">EPSG:32644 &middot; UTM 44N</span>
+  </div>
+</header>
+
+<!-- VIEW 1: SIMULATION -->
+<div class="view active" id="v-sim">
+<div class="layout">
+
+  <!-- LEFT PANEL -->
+  <div class="panel pl">
+    <div class="card">
+      <div class="ctitle">Flood Scenario</div>
+      <div class="scgrid">
+        <button class="scbtn active" data-sc="normal" onclick="pickSc(this)">
+          <span class="scico">&#127783;&#65039;</span><span>Normal<br>Monsoon</span></button>
+        <button class="scbtn" data-sc="historical_2020" onclick="pickSc(this)">
+          <span class="scico">&#128197;</span><span>2020<br>Event</span></button>
+        <button class="scbtn" data-sc="extreme" onclick="pickSc(this)">
+          <span class="scico">&#9888;&#65039;</span><span>Extreme<br>Rain</span></button>
+        <button class="scbtn" data-sc="worst_case" onclick="pickSc(this)">
+          <span class="scico">&#128680;</span><span>Worst<br>Case</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">Simulation Parameters</div>
+      <div class="slgrp">
+        <div class="sllbl"><span>Rainfall</span><span class="slval" id="v-rain">150 mm</span></div>
+        <input type="range" id="sl-rain" min="50" max="500" value="150" step="10"
+               oninput="setSl('rain',+this.value)">
+      </div>
+      <div class="slgrp">
+        <div class="sllbl"><span>Barrage Release</span>
+          <span class="slval" id="v-bar">5,000 cusecs</span></div>
+        <input type="range" id="sl-bar" min="1000" max="20000" value="5000" step="500"
+               oninput="setSl('bar',+this.value)">
+      </div>
+      <div class="slgrp">
+        <div class="sllbl"><span>Duration</span><span class="slval" id="v-hrs">24 hours</span></div>
+        <input type="range" id="sl-hrs" min="6" max="72" value="24" step="6"
+               oninput="setSl('hrs',+this.value)">
+      </div>
+      <div class="slgrp">
+        <div class="sllbl"><span>Playback Speed</span>
+          <span class="slval" id="v-spd">500 ms</span></div>
+        <input type="range" id="sl-spd" min="100" max="2000" value="500" step="100"
+               oninput="setSl('spd',+this.value)">
+      </div>
+      <button class="runbtn" id="run-btn" onclick="runSim()">&#9654; Run Simulation</button>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">Model Statistics</div>
+      <div class="stgrid">
+        <div class="stcard">
+          <div class="stval">{{ stats.total_nodes|int }}</div>
+          <div class="stlbl">Hex Nodes</div>
+        </div>
+        <div class="stcard">
+          <div class="stval">{{ stats.total_routes }}</div>
+          <div class="stlbl">Routes</div>
+        </div>
+        <div class="stcard">
+          <div class="stval">{{ stats.total_sinks }}</div>
+          <div class="stlbl">Sinks</div>
+        </div>
+        <div class="stcard">
+          <div class="stval">{{ "%.1f"|format(stats.avg_elev) }}m</div>
+          <div class="stlbl">Avg Elev</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Story Mode -->
+    <div class="card">
+      <div class="ctitle">&#127908; Story Mode</div>
+      <div style="font-size:9px;color:#64748b;margin-bottom:8px;line-height:1.5">
+        Walk through the presentation step by step
+      </div>
+      <button class="runbtn"
+              style="background:#7c3aed;box-shadow:0 2px 6px rgba(124,58,237,.22)"
+              onclick="startStory()">&#9654; Start Story</button>
+      <div id="story-step" style="display:none;margin-top:8px;padding:8px;
+           background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;
+           font-size:9px;color:#5b21b6;line-height:1.5"></div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="mapwrap">
+    <div id="map"></div>
+
+    <div class="loading" id="loading">
+      <div class="spin"></div>
+      <div class="ldtxt">Running Simulation…</div>
+      <div class="ldsub" id="ld-sub">Initialising…</div>
+    </div>
+
+    <!-- Overlays 2x2 -->
+    <div class="overlays">
+      <div class="ov">
+        <div class="ovlbl">Flood Extent</div>
+        <div class="ovval cr" id="ov-pct">0%</div>
+        <div class="ovsub" id="ov-n">0 nodes</div>
+      </div>
+      <div class="ov">
+        <div class="ovlbl">Population at Risk</div>
+        <div class="ovval ca" id="ov-pop">0</div>
+        <div class="ovsub">people affected</div>
+      </div>
+      <div class="ov">
+        <div class="ovlbl">Storage Used</div>
+        <div class="ovval cg" id="ov-stor">0%</div>
+        <div class="ovsub" id="ov-sn">across sinks</div>
+      </div>
+      <div class="ov">
+        <div class="ovlbl">Routes Active</div>
+        <div class="ovval cb" id="ov-rts">0</div>
+        <div class="ovsub" id="ov-rsub">of 0 paths</div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legh">Legend</div>
+      <div class="legr">
+        <div class="legln"
+             style="background:linear-gradient(90deg,#16a34a,#d97706,#dc2626)"></div>
+        <span>Route cost (low→high)</span>
+      </div>
+      <div class="legr">
+        <div class="legdt"
+             style="background:#1d4ed8;border:2px solid #fff;
+                    box-shadow:0 0 0 1px #cbd5e1"></div>
+        <span>Storage sinks</span>
+      </div>
+      <div class="legr">
+        <div style="width:20px;height:7px;background:#dc2626;
+                    border:1.5px solid #7f1d1d;border-radius:1px;flex-shrink:0"></div>
+        <span>Prakasam Barrage</span>
+      </div>
+      <div class="legr">
+        <div class="legdt" style="background:#3b82f6;opacity:.75"></div>
+        <span>Flood water</span>
+      </div>
+      <div class="legr">
+        <div class="legln" style="background:#0ea5e9;height:2px"></div>
+        <span>Rivers / waterways</span>
+      </div>
+    </div>
+
+    <!-- Layer toggles -->
+    <div class="layer-toggle">
+      <div class="ltitle">Layers</div>
+      <div class="lrow">
+        <button class="ltog on" id="tog-routes"
+                onclick="toggleLayer('routes',this)"></button>
+        <span>Routes</span>
+      </div>
+      <div class="lrow">
+        <button class="ltog on" id="tog-sinks"
+                onclick="toggleLayer('sinks',this)"></button>
+        <span>Sinks</span>
+      </div>
+      <div class="lrow">
+        <button class="ltog on" id="tog-rivers"
+                onclick="toggleLayer('rivers',this)"></button>
+        <span>Rivers</span>
+      </div>
+      <div class="lrow">
+        <button class="ltog on" id="tog-flood"
+                onclick="toggleLayer('flood',this)"></button>
+        <span>Flood water</span>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="tl">
+      <div class="tlbtns">
+        <button class="tlbtn" onclick="step(-1)">&#9664;</button>
+        <button class="tlbtn" id="play-btn" onclick="togglePlay()">&#9654;</button>
+        <button class="tlbtn" onclick="step(1)">&#9654;</button>
+        <button class="tlbtn" onclick="doReset()">&#8635;</button>
+      </div>
+      <div class="tlwrap">
+        <input type="range" id="tl-sl" min="0" max="24" value="0" step="1"
+               oninput="scrub(+this.value)">
+        <div class="tllabs">
+          <span>Hour 0</span>
+          <span id="tl-mid">Hour 12</span>
+          <span id="tl-end">Hour 24</span>
+        </div>
+      </div>
+      <div class="tdisp" id="t-disp">T+0h</div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel pr">
+    <div class="chcard">
+      <div class="chtitle">Flood Progression (%)</div>
+      <canvas id="ch-flood" height="90"></canvas>
+    </div>
+    <div class="chcard">
+      <div class="chtitle">Population at Risk</div>
+      <canvas id="ch-pop" height="80"></canvas>
+    </div>
+    <div class="chcard">
+      <div class="chtitle">Storage Sinks Filling</div>
+      <div id="stor-bars">
+        <div style="text-align:center;color:#94a3b8;padding:14px 0;font-size:10px">
+          Run simulation to view</div>
+      </div>
+    </div>
+    <div class="chcard">
+      <div class="chtitle">Route Cost Distribution</div>
+      <canvas id="ch-cost" height="78"></canvas>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+</div><!-- /v-sim -->
+
+<!-- VIEW 2: ANALYTICS -->
+<div class="view" id="v-analytics">
+  <div class="analytics-grid" id="analytics-content">
+    <div style="text-align:center;color:#94a3b8;padding:40px;
+                grid-column:span 3;font-size:12px">
+      Loading analytics…
+    </div>
+  </div>
+</div>
+
+<!-- VIEW 3: QUERY EXPLORER -->
+<div class="view" id="v-queries">
+  <div class="q-header">
+    <h2>&#128269; Spatial Query Explorer</h2>
+    <p>Each query answers a core research question using the GIS &amp; ML pipeline.
+       Click a query to see the answer and sub-queries.</p>
+  </div>
+  <div class="q-grid">
+    <div class="q-list" id="q-list"></div>
+    <div class="q-answer" id="q-answer">
+      <div style="text-align:center;color:#94a3b8;padding:40px;font-size:12px">
+        Select a query to view the answer
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────────
+const G = {
+  sc:'normal', rain:150, bar:5000, hrs:24, spd:500,
+  data:null, hour:0, playing:false, timer:null,
+  map:null,
+  routeLayers:[],
+  routeGroup:null,
+  sinkGroup:null,
+  riverGroup:null,
+  barrageLayer:null,
+  floodLayer:null,
+  flowMarkers:[],
+  charts:{}, nRoutes:0, nSinks:0, routeCosts:[],
+  analytics:null,
+  layerVisible:{routes:true, sinks:true, rivers:true, flood:true},
+  srcLat:16.5173, srcLng:80.6037,
+};
+
+// ── TAB SWITCHING ──────────────────────────────────────────────────────────────
+function switchTab(name, btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('v-'+name).classList.add('active');
+  if(name==='analytics' && !G.analytics) loadAnalytics();
+  if(name==='queries'   && !G.analytics) loadAnalytics();
+  if(G.map) setTimeout(()=>G.map.invalidateSize(),100);
+}
+
+// ── BOOT ───────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async()=>{
+  setSl('rain',150); setSl('bar',5000); setSl('hrs',24); setSl('spd',500);
+  await initMap();
+  loadAnalytics();
+});
+
+// ── COST COLOUR green→amber→red ────────────────────────────────────────────────
+function costCol(c){
+  c = Math.max(0, Math.min(1, c));
+  if(c < 0.5){
+    const t = c / 0.5;
+    return `rgb(${Math.round(22  + t*(217-22))},`+
+               `${Math.round(163 + t*(119-163))},`+
+               `${Math.round(74  + t*(6-74))})`;
+  }
+  const t = (c - 0.5) / 0.5;
+  return `rgb(${Math.round(217 + t*(220-217))},`+
+             `${Math.round(119 + t*(38-119))},`+
+             `${Math.round(6   + t*(38-6))})`;
+}
+
+// ── MAP INIT ───────────────────────────────────────────────────────────────────
+async function initMap(){
+  let clat=16.52, clng=80.62;
+  try{
+    const b = await fetch('/api/bounds').then(r=>r.json());
+    clat=b.center_lat; clng=b.center_lng;
+  }catch(e){ console.warn('bounds',e); }
+
+  G.map = L.map('map',{center:[clat,clng], zoom:11, zoomControl:true});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OSM &copy; CARTO', subdomains:'abcd', maxZoom:19
+  }).addTo(G.map);
+
+  await Promise.all([loadRoutes(), loadSinks(), loadSource(), loadRivers()]);
+}
+
+// ── LOAD ROUTES ────────────────────────────────────────────────────────────────
+async function loadRoutes(){
+  try{
+    const geo   = await fetch('/api/routes').then(r=>r.json());
+    const feats = geo.features || [];
+    G.nRoutes   = feats.length;
+    G.routeCosts = feats.map(f=>f.properties?.routing_cost ?? 0.5);
+
+    document.getElementById('ov-rsub').textContent = `of ${feats.length} paths`;
+
+    const individualLayers = [];
+    feats.forEach((feat, idx)=>{
+      const cost   = feat.properties?.routing_cost ?? 0.5;
+      const colour = costCol(cost);
+
+      const lyr = L.geoJSON(feat,{
+        style:{
+          color:colour, weight:2.8, opacity:0.9,
+          lineCap:'round', lineJoin:'round'
+        },
+        onEachFeature:(f,l)=>{
+          const p = f.properties || {};
+          const costLabel = (p.routing_cost||0) < 0.35 ? 'Low (green)' :
+                            (p.routing_cost||0) < 0.65 ? 'Medium (amber)' : 'High (red)';
+          l.bindPopup(`
+            <div style="font-size:11px;color:#1e293b;min-width:170px">
+              <b style="color:#1d4ed8">Route #${p.path_id ?? idx+1}</b>
+              <div style="margin:4px 0;height:6px;border-radius:3px;
+                   background:${colour};opacity:0.85"></div>
+              <b>Cost:</b> ${(p.routing_cost||0).toFixed(3)}
+              <span style="font-size:9px;color:#64748b">(${costLabel})</span><br>
+              <b>Hexagons:</b> ${p.n_hexagons||'?'}<br>
+              <b>Sink suitability:</b> ${(p.sink_suitability||0).toFixed(3)}<br>
+              <b>Elev drop:</b> ${(p.elev_drop_m||0).toFixed(1)} m<br>
+              <b>Max pop crossed:</b> ${p.max_pop_crossed||0}
+            </div>`);
+        }
+      });
+
+      G.routeLayers.push({lyr, feat, idx, cost});
+      individualLayers.push(lyr);
+    });
+
+    G.routeGroup = L.layerGroup(individualLayers);
+    if(G.layerVisible.routes) G.routeGroup.addTo(G.map);
+
+    if(feats.length){
+      try{
+        const allCoords = feats.flatMap(f=>
+          (f.geometry?.coordinates||[]).map(c=>[c[1],c[0]])
+        );
+        if(allCoords.length)
+          G.map.fitBounds(L.latLngBounds(allCoords),{padding:[28,28]});
+      }catch(_){}
+    }
+
+    document.getElementById('sim-status').textContent = `${feats.length} routes loaded`;
+  }catch(e){ console.warn('routes',e); }
+}
+
+// ── LOAD SINKS ─────────────────────────────────────────────────────────────────
+async function loadSinks(){
+  try{
+    const sinks = await fetch('/api/sinks').then(r=>r.json());
+    G.nSinks    = sinks.length;
+    document.getElementById('ov-sn').textContent = `across ${sinks.length} sinks`;
+
+    const markers = sinks.map(sk=>{
+      const rad   = sk.type==='large' ? 9 : sk.type==='small' ? 5 : 7;
+      const alpha = 0.5 + sk.suitability * 0.5;
+      return L.circleMarker([sk.lat, sk.lng],{
+        radius:rad, fillColor:'#1d4ed8', color:'#fff',
+        weight:2, opacity:1, fillOpacity:alpha,
+      }).bindPopup(`
+        <div style="font-size:11px;color:#1e293b;min-width:150px">
+          <b style="color:#1d4ed8">Storage Sink (${sk.type})</b><br>
+          Capacity: <b>${sk.capacity} units</b><br>
+          Suitability: <b>${sk.suitability}</b><br>
+          Elevation: <b>${sk.elev} m</b><br>
+          Population: <b>${sk.population}</b>
+        </div>`);
+    });
+
+    G.sinkGroup = L.layerGroup(markers).addTo(G.map);
+  }catch(e){ console.warn('sinks',e); }
+}
+
+// ── LOAD SOURCE (BARRAGE) ──────────────────────────────────────────────────────
+async function loadSource(){
+  try{
+    const s = await fetch('/api/source').then(r=>r.json());
+    G.srcLat = s.lat;
+    G.srcLng = s.lng;
+
+    const lat        = s.lat;
+    const lng        = s.lng;
+    const halfLenDeg = 0.009;
+    const halfWidDeg = 0.0005;
+
+    const barrageCorners = [
+      [lat - halfWidDeg, lng - halfLenDeg],
+      [lat - halfWidDeg, lng + halfLenDeg],
+      [lat + halfWidDeg, lng + halfLenDeg],
+      [lat + halfWidDeg, lng - halfLenDeg],
+    ];
+
+    G.barrageLayer = L.polygon(barrageCorners,{
+      color:'#7f1d1d', fillColor:'#dc2626',
+      fillOpacity:0.92, weight:3,
+    }).addTo(G.map);
+
+    const nGates = 8;
+    for(let i=0; i<=nGates; i++){
+      const gateLng = (lng - halfLenDeg) + (i/nGates)*halfLenDeg*2;
+      L.polyline([
+        [lat - halfWidDeg*3.5, gateLng],
+        [lat + halfWidDeg*3.5, gateLng]
+      ],{color:'#7f1d1d', weight:1.5, opacity:0.7}).addTo(G.map);
+    }
+
+    const barrageIcon = L.divIcon({
+      html:`<div style="background:#dc2626;color:#fff;font-size:9px;font-weight:700;
+              padding:2px 6px;border-radius:3px;border:1.5px solid #7f1d1d;
+              white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.3)">
+              ▬ Prakasam Barrage</div>`,
+      className:'', iconAnchor:[60,-6],
+    });
+
+    L.marker([lat + halfWidDeg*4, lng],{icon:barrageIcon, zIndexOffset:1000})
+     .addTo(G.map)
+     .bindPopup(`
+       <div style="font-size:11px;color:#1e293b">
+         <b style="color:#dc2626">Prakasam Barrage — Flood Source</b><br>
+         Location: <b>${lat.toFixed(4)}°N ${lng.toFixed(4)}°E</b><br>
+         Elevation: <b>${s.elevation} m MSL</b><br>
+         Gates: <b>26 (up to 11.5L cusecs)</b><br>
+         <span style="font-size:9px;color:#64748b">Built 1955 · Krishna River</span>
+       </div>`);
+
+  }catch(e){ console.warn('source',e); }
+}
+
+// ── LOAD RIVERS ────────────────────────────────────────────────────────────────
+async function loadRivers(){
+  try{
+    const geo = await fetch('/api/rivers').then(r=>r.json());
+    if(!geo.features?.length) return;
+    G.riverGroup = L.geoJSON(geo,{
+      style:{color:'#0ea5e9', weight:1.5, opacity:0.7},
+    }).addTo(G.map);
+  }catch(e){ console.warn('rivers',e); }
+}
+
+// ── LAYER TOGGLES ──────────────────────────────────────────────────────────────
+function toggleLayer(name, btn){
+  btn.classList.toggle('on');
+  const on = btn.classList.contains('on');
+  G.layerVisible[name] = on;
+
+  if(name==='routes'){
+    if(!G.routeGroup) return;
+    on ? G.routeGroup.addTo(G.map) : G.map.removeLayer(G.routeGroup);
+  } else if(name==='sinks'){
+    if(G.sinkGroup) on ? G.sinkGroup.addTo(G.map) : G.map.removeLayer(G.sinkGroup);
+  } else if(name==='rivers'){
+    if(G.riverGroup) on ? G.riverGroup.addTo(G.map) : G.map.removeLayer(G.riverGroup);
+  } else if(name==='flood'){
+    if(G.floodLayer) on ? G.floodLayer.addTo(G.map) : G.map.removeLayer(G.floodLayer);
+  }
+}
+
+// ── SCENARIO ───────────────────────────────────────────────────────────────────
+function pickSc(btn){
+  document.querySelectorAll('.scbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  G.sc = btn.dataset.sc;
+  const P = {
+    normal:          {rain:150,  bar:5000,  hrs:24},
+    historical_2020: {rain:280,  bar:11500, hrs:48},
+    extreme:         {rain:400,  bar:15000, hrs:36},
+    worst_case:      {rain:500,  bar:20000, hrs:72},
+  };
+  const p = P[G.sc];
+  if(p){
+    ['rain','bar','hrs'].forEach(k=>{
+      document.getElementById(`sl-${k}`).value = p[k];
+      setSl(k, p[k]);
+    });
+  }
+}
+
+function setSl(k, v){
+  switch(k){
+    case 'rain':
+      G.rain = v;
+      document.getElementById('v-rain').textContent = `${v} mm`;
+      break;
+    case 'bar':
+      G.bar = v;
+      document.getElementById('v-bar').textContent = `${v.toLocaleString()} cusecs`;
+      break;
+    case 'hrs':
+      G.hrs = v;
+      document.getElementById('v-hrs').textContent = `${v} hours`;
+      document.getElementById('tl-sl').max = v;
+      document.getElementById('tl-mid').textContent = `Hour ${Math.round(v/2)}`;
+      document.getElementById('tl-end').textContent = `Hour ${v}`;
+      break;
+    case 'spd':
+      G.spd = v;
+      document.getElementById('v-spd').textContent = `${v} ms`;
+      if(G.playing){ stopPlay(); startPlay(); }
+      break;
+  }
+}
+
+// ── SIMULATION ─────────────────────────────────────────────────────────────────
+async function runSim(){
+  const btn       = document.getElementById('run-btn');
+  const loadingEl = document.getElementById('loading');
+  const ldSub     = document.getElementById('ld-sub');
+
+  btn.disabled = true;
+  stopPlay();
+  loadingEl.classList.add('show');
+  ldSub.textContent = 'Initialising…';
+
+  const msgs = [
+    'Loading elevation model…',
+    'Building spatial graph…',
+    'Computing flood propagation…',
+    'Routing to storage sinks…',
+    'Finalising visualisation…'
+  ];
+  let mi = 0;
+  const mInt = setInterval(()=>{
+    if(mi < msgs.length) ldSub.textContent = msgs[mi++];
+  }, 750);
+
+  // Always clears interval AND hides the overlay
+  const hideLoading = ()=>{
+    clearInterval(mInt);
+    loadingEl.classList.remove('show');
+  };
+
+  document.getElementById('sim-status').textContent = 'Simulating…';
+
+  try{
+    const res = await fetch('/api/simulate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        rainfall_mm:     G.rain,
+        barrage_release: G.bar,
+        time_hours:      G.hrs,
+        scenario:        G.sc
+      }),
+    });
+
+    // Check HTTP-level error first
+    if(!res.ok){
+      const txt = await res.text();
+      throw new Error(`HTTP ${res.status} — ${txt.slice(0,120)}`);
+    }
+
+    const data = await res.json();
+    hideLoading();
+
+    // Validate response shape
+    if(!data.success){
+      throw new Error(data.error || 'Server returned success:false');
+    }
+    if(!Array.isArray(data.timesteps) || data.timesteps.length === 0){
+      throw new Error('Server returned no timestep data');
+    }
+
+    G.data  = data.timesteps;
+    G.hour  = 0;
+
+    try{ buildCharts(data.timesteps); }
+    catch(ce){ console.warn('Chart error (non-fatal):', ce); }
+
+    try{ showHour(0); }
+    catch(se){ console.warn('showHour error (non-fatal):', se); }
+
+    document.getElementById('sim-status').textContent =
+      `Complete — ${data.timesteps.length} steps`;
+    btn.disabled = false;
+    setTimeout(startPlay, 400);
+
+  }catch(e){
+    hideLoading();
+    console.error('Simulation error:', e);
+
+    // Show error message in the overlay briefly
+    ldSub.textContent = 'Error: ' + e.message;
+    document.getElementById('sim-status').textContent = 'Error';
+    loadingEl.classList.add('show');
+    setTimeout(()=> loadingEl.classList.remove('show'), 4000);
+
+    btn.disabled = false;
+  }
+}
+
+// ── RENDER HOUR ────────────────────────────────────────────────────────────────
+function showHour(h){
+  if(!G.data || h < 0 || h >= G.data.length) return;
+  const d = G.data[h];
+  if(!d){ console.warn('No data for hour', h); return; }
+
+  // Flood water overlay
+  if(G.floodLayer){ G.map.removeLayer(G.floodLayer); G.floodLayer = null; }
+
+  const floodNodes = Array.isArray(d.flood_nodes) ? d.flood_nodes : [];
+  if(floodNodes.length && G.layerVisible.flood){
+    try{
+      const marks = floodNodes
+        .filter(n => n && typeof n.lat==='number' && typeof n.lng==='number')
+        .map(n=>{
+          const iv = Math.min(1, (n.depth||0)/4);
+          return L.circleMarker([n.lat, n.lng],{
+            radius:      2 + iv*4.5,
+            fillColor:   '#3b82f6',
+            color:       'transparent',
+            fillOpacity: 0.25 + iv*0.6,
+          });
+        });
+      if(marks.length)
+        G.floodLayer = L.layerGroup(marks).addTo(G.map);
+    }catch(fe){ console.warn('Flood layer error:', fe); }
+  }
+
+  // Flow animation
+  try{ drawFlows(Array.isArray(d.route_flows) ? d.route_flows : []); }
+  catch(fe){ console.warn('drawFlows error:', fe); }
+
+  // HUD
+  document.getElementById('t-disp').textContent  = `T+${h}h`;
+  document.getElementById('tl-sl').value         = h;
+  document.getElementById('ov-pct').textContent  = `${d.pct_flooded  ?? 0}%`;
+  document.getElementById('ov-n').textContent    =
+    `${(d.n_flooded || 0).toLocaleString()} nodes`;
+  document.getElementById('ov-pop').textContent  =
+    (d.flooded_population || 0).toLocaleString();
+  document.getElementById('ov-stor').textContent = `${d.storage_pct_used ?? 0}%`;
+  document.getElementById('ov-rts').textContent  = d.routes_active ?? 0;
+
+  try{ drawStorBars(Array.isArray(d.storage_filling) ? d.storage_filling : []); }
+  catch(se){ console.warn('drawStorBars error:', se); }
+}
+
+// ── FLOW ANIMATION ─────────────────────────────────────────────────────────────
+function drawFlows(flows){
+  G.flowMarkers.forEach(m => G.map.removeLayer(m));
+  G.flowMarkers = [];
+
+  flows.forEach(f=>{
+    const rd = G.routeLayers[f.route_id];
+    if(!rd?.feat) return;
+
+    const coords = rd.feat.geometry?.coordinates;
+    if(!coords?.length) return;
+
+    const progress = Math.max(0, Math.min(1, f.progress || 0));
+    const maxIdx   = coords.length - 1;
+    const floatIdx = progress * maxIdx;
+    const lo       = Math.floor(floatIdx);
+    const hi       = Math.min(lo+1, maxIdx);
+    const frac     = floatIdx - lo;
+
+    const lngA = coords[lo][0], latA = coords[lo][1];
+    const lngB = coords[hi][0], latB = coords[hi][1];
+
+    const lat = latA + frac*(latB-latA);
+    const lng = lngA + frac*(lngB-lngA);
+
+    if(isNaN(lat) || isNaN(lng)) return;
+
+    const iv  = Math.min(1, (f.volume||0)/100);
+    const col = rd.cost < 0.35 ? '#22c55e' :
+                rd.cost < 0.65 ? '#f59e0b' : '#ef4444';
+
+    const m = L.circleMarker([lat, lng],{
+      radius:      4 + iv*5,
+      fillColor:   col,
+      color:       '#fff',
+      weight:      1.5,
+      opacity:     1,
+      fillOpacity: 0.9,
+    }).addTo(G.map);
+
+    G.flowMarkers.push(m);
+  });
+}
+
+// ── STORAGE BARS ───────────────────────────────────────────────────────────────
+function drawStorBars(filling){
+  const el = document.getElementById('stor-bars');
+  if(!filling.length){
+    el.innerHTML = '<div style="text-align:center;color:#94a3b8;' +
+                   'padding:12px 0;font-size:10px">No data</div>';
+    return;
+  }
+  const top  = Math.min(10, filling.length);
+  let   html = '';
+  for(let i=0; i<top; i++){
+    const pct = Math.round(filling[i] || 0);
+    const col = pct>80 ? '#dc2626' : pct>55 ? '#d97706' : '#16a34a';
+    html += `<div class="sbrow">
+      <div class="sblbl">Sink ${i+1}</div>
+      <div class="sbtrack">
+        <div class="sbfill" style="width:${pct}%;background:${col}"></div>
+      </div>
+      <div class="sbpct">${pct}%</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ── CHARTS ─────────────────────────────────────────────────────────────────────
+function buildCharts(ts){
+  const labels = ts.map(t=>`${t.hour}h`);
+  const base = {
+    responsive:true, maintainAspectRatio:true, animation:{duration:120},
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{ticks:{color:'#94a3b8',font:{size:8},maxTicksLimit:9},grid:{color:'#f1f5f9'}},
+      y:{ticks:{color:'#94a3b8',font:{size:8}},grid:{color:'#f1f5f9'}}
+    }
+  };
+
+  function mkLine(id, data, bdr, bg){
+    const ctx = document.getElementById(id).getContext('2d');
+    if(G.charts[id]) G.charts[id].destroy();
+    G.charts[id] = new Chart(ctx,{
+      type:'line',
+      data:{labels, datasets:[{
+        data, borderColor:bdr, backgroundColor:bg,
+        fill:true, tension:.4, borderWidth:2, pointRadius:0
+      }]},
+      options: base,
+    });
+  }
+
+  mkLine('ch-flood', ts.map(t=>t.pct_flooded||0),        '#dc2626','rgba(220,38,38,.09)');
+  mkLine('ch-pop',   ts.map(t=>t.flooded_population||0), '#d97706','rgba(217,119,6,.09)');
+
+  const bins = [0,0,0,0,0];
+  G.routeCosts.forEach(c=>{
+    const b = c<.2?0 : c<.4?1 : c<.6?2 : c<.8?3 : 4;
+    bins[b]++;
+  });
+  const costData = bins.some(v=>v>0) ? bins : [5,12,18,10,5];
+  const rctx = document.getElementById('ch-cost').getContext('2d');
+  if(G.charts.cost) G.charts.cost.destroy();
+  G.charts.cost = new Chart(rctx,{
+    type:'bar',
+    data:{
+      labels:['<0.2','0.2–0.4','0.4–0.6','0.6–0.8','>0.8'],
+      datasets:[{
+        data: costData,
+        backgroundColor:['#16a34a','#65a30d','#ca8a04','#dc2626','#7f1d1d'],
+        borderRadius:3,
+      }]
+    },
+    options:{...base, plugins:{legend:{display:false}}},
+  });
+}
+
+// ── PLAYBACK ───────────────────────────────────────────────────────────────────
+function togglePlay(){ G.playing ? stopPlay() : startPlay(); }
+
+function startPlay(){
+  if(!G.data) return;
+  G.playing = true;
+  document.getElementById('play-btn').innerHTML='&#9646;&#9646;';
+  G.timer = setInterval(()=>{
+    if(G.hour >= G.hrs){ stopPlay(); return; }
+    G.hour++;
+    showHour(G.hour);
+  }, G.spd);
+}
+
+function stopPlay(){
+  G.playing = false;
+  document.getElementById('play-btn').innerHTML='&#9654;';
+  clearInterval(G.timer);
+  G.timer = null;
+}
+
+function step(d){
+  stopPlay();
+  if(!G.data) return;
+  G.hour = Math.max(0, Math.min(G.hrs, G.hour+d));
+  showHour(G.hour);
+}
+
+function scrub(v){
+  stopPlay();
+  if(!G.data) return;
+  G.hour = +v;
+  showHour(G.hour);
+}
+
+function doReset(){
+  stopPlay();
+  G.hour = 0;
+  if(G.floodLayer){ G.map.removeLayer(G.floodLayer); G.floodLayer=null; }
+  G.flowMarkers.forEach(m=>G.map.removeLayer(m));
+  G.flowMarkers = [];
+  document.getElementById('ov-pct').textContent  = '0%';
+  document.getElementById('ov-n').textContent    = '0 nodes';
+  document.getElementById('ov-pop').textContent  = '0';
+  document.getElementById('ov-stor').textContent = '0%';
+  document.getElementById('ov-rts').textContent  = '0';
+  document.getElementById('t-disp').textContent  = 'T+0h';
+  document.getElementById('tl-sl').value         = 0;
+  document.getElementById('stor-bars').innerHTML =
+    '<div style="text-align:center;color:#94a3b8;padding:14px 0;font-size:10px">' +
+    'Run simulation to view</div>';
+}
+
+// ── STORY MODE ─────────────────────────────────────────────────────────────────
+const STORY = [
+  {
+    msg:"Step 1: The red rectangle marks Prakasam Barrage — the primary flood source. " +
+        "26 gates can release up to 11.5 lakh cusecs into the Krishna River.",
+    action:()=>{
+      if(G.barrageLayer) G.map.fitBounds(G.barrageLayer.getBounds(),{maxZoom:14});
+    }
+  },
+  {
+    msg:"Step 2: 50 optimised routing paths are shown — coloured green (low cost) " +
+        "through amber to red (high cost). Each route is individually coloured.",
+    action:()=>{
+      if(G.routeGroup && G.routeLayers.length){
+        try{
+          G.map.fitBounds(L.latLngBounds(
+            G.routeLayers.flatMap(r=>
+              r.feat.geometry.coordinates.map(c=>[c[1],c[0]])
+            )
+          ),{padding:[20,20]});
+        }catch(_){}
+      }
+    }
+  },
+  {
+    msg:"Step 3: Blue dots are storage sinks — low-lying zones with high ML " +
+        "suitability scores (ROC-AUC 0.8195). Water is routed here from the barrage.",
+    action:()=>{
+      if(G.sinkGroup){
+        try{ G.map.fitBounds(G.sinkGroup.getBounds(),{padding:[40,40]}); }catch(_){}
+      }
+    }
+  },
+  {
+    msg:"Step 4: Running worst-case scenario — 500mm rainfall, 20,000 cusecs, 72 hours. " +
+        "Watch the animated water-front move FROM the barrage along each route.",
+    action:()=>{
+      document.querySelectorAll('.scbtn').forEach(b=>b.classList.remove('active'));
+      document.querySelector('[data-sc=worst_case]').classList.add('active');
+      G.sc='worst_case';
+      ['rain','bar','hrs'].forEach((k,i)=>{
+        const vals=[500,20000,72];
+        document.getElementById(`sl-${k}`).value=vals[i];
+        setSl(k,vals[i]);
+      });
+      runSim();
+    }
+  },
+  {
+    msg:"Step 5: Toggle the Routes layer off and on — each individual route " +
+        "reappears with its own cost colour.",
+    action:()=>{
+      const btn=document.getElementById('tog-routes');
+      toggleLayer('routes',btn);
+      setTimeout(()=>toggleLayer('routes',btn),1200);
+    }
+  },
+  {
+    msg:"Step 6: Switch to the Analytics tab to see feature importance " +
+        "and the ML model summary.",
+    action:()=>{ document.querySelectorAll('.tab')[1].click(); }
+  },
+  {
+    msg:"Step 7: The Query Explorer answers every spatial research question " +
+        "with detailed sub-queries.",
+    action:()=>{ document.querySelectorAll('.tab')[2].click(); }
+  },
+];
+
+let storyIdx = 0;
+function startStory(){ storyIdx=0; runStoryStep(); }
+function runStoryStep(){
+  if(storyIdx >= STORY.length){
+    document.getElementById('story-step').textContent='Story complete! ✓';
+    return;
+  }
+  const s  = STORY[storyIdx];
+  const el = document.getElementById('story-step');
+  el.style.display = 'block';
+  el.innerHTML = `<div style="margin-bottom:6px">${s.msg}</div>
+    <button onclick="storyIdx++;runStoryStep()" style="
+      background:#7c3aed;color:#fff;border:none;border-radius:4px;
+      padding:3px 10px;font-size:9px;cursor:pointer;font-weight:700">
+      ${storyIdx < STORY.length-1 ? 'Next →' : 'Finish'}
+    </button>`;
+  try{ s.action(); }catch(e){ console.warn('Story action error:',e); }
+}
+
+// ── QUERIES DATA ───────────────────────────────────────────────────────────────
+const QUERIES = [
+  {
+    num:'MQ',
+    title:'Where should flood water be routed to minimise damage?',
+    sub:'The central research question driving the entire project',
+    answer:{
+      title:'Main Research Query — Optimal Flood Routing',
+      desc:'Using a hexagonal grid spatial model, ML suitability scoring ' +
+           '(LightGBM ROC-AUC 0.8195), and Dijkstra-based graph routing, we identify ' +
+           'the optimal set of storage sinks and routing paths that minimise: ' +
+           '(1) population exposure, (2) routing cost, (3) infrastructure disruption.',
+      body:`
+        <div class="subq">
+          <div class="subq-title">How is this answered?</div>
+          3-stage pipeline: (1) Suitability scoring of every hex cell using LightGBM →
+          (2) Graph construction with cost = f(elevation, population, suitability) →
+          (3) Shortest-path routing from Prakasam Barrage to top-k sinks
+        </div>
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v">50</div>
+            <div class="ans-l">Optimal Routes</div></div>
+          <div class="ans-k"><div class="ans-v">0.8195</div>
+            <div class="ans-l">ROC-AUC</div></div>
+          <div class="ans-k"><div class="ans-v">342,573</div>
+            <div class="ans-l">Hex Nodes</div></div>
+          <div class="ans-k"><div class="ans-v">69 km</div>
+            <div class="ans-l">Avg Route Length</div></div>
+        </div>
+        <div class="subq">
+          <div class="subq-title">Cost function formula</div>
+          routing_cost = (1−elev_drop_norm)×0.4 + pop_density_norm×0.4 +
+          (1−suitability)×0.2
+          <span class="ans-tag">Multi-criteria</span>
+        </div>
+        <div class="subq">
+          <div class="subq-title">Colour coding on map</div>
+          Green routes (cost &lt;0.35) = easy downhill paths avoiding population.<br>
+          Amber routes (0.35–0.65) = moderate terrain or population crossing.<br>
+          Red routes (cost &gt;0.65) = cross dense or elevated terrain.
+          <span class="ans-tag info">Green→Red scale</span>
+        </div>`
+    }
+  },
+  {
+    num:'SQ1',
+    title:'Which zones are most suitable for water storage?',
+    sub:'Elevation + LULC + distance to water + flood probability · LightGBM',
+    answer:{
+      title:'Sub-Query 1 — Storage Suitability Zones',
+      desc:'Each hexagonal cell is scored using LightGBM trained on 4 Sentinel-1 SAR ' +
+           'flood events (2019–2024). Suitability = Flood_Prob × (1−Pop_Penalty) × ' +
+           '(1−Urban_Penalty).',
+      body:`
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v" style="color:#16a34a">High ≥0.85</div>
+            <div class="ans-l">Best zones</div></div>
+          <div class="ans-k"><div class="ans-v" style="color:#d97706">0.70–0.85</div>
+            <div class="ans-l">Medium zones</div></div>
+          <div class="ans-k"><div class="ans-v" style="color:#dc2626">&lt;0.70</div>
+            <div class="ans-l">Low suitability</div></div>
+        </div>
+        <div class="subq"><div class="subq-title">Feature importance ranking</div>
+          Elevation (31%) → TWI/Flow Acc (24%) → Dist to Water (19%) →
+          Rainfall (14%) → Slope (8%) → LULC (4%)
+        </div>`
+    }
+  },
+  {
+    num:'SQ2',
+    title:'What is the optimal path from source to each sink?',
+    sub:'Dijkstra LCP · NetworkX · 342,573 hex nodes · multi-criteria cost',
+    answer:{
+      title:'Sub-Query 2 — Routing Optimisation (Dijkstra LCP)',
+      desc:'An undirected weighted graph of 342,573 hexagonal nodes (EPSG:32644). ' +
+           'Edge weights combine elevation drop (reward), population density (penalty), ' +
+           'and suitability.',
+      body:`
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v">342,573</div>
+            <div class="ans-l">Graph Nodes</div></div>
+          <div class="ans-k"><div class="ans-v">50</div>
+            <div class="ans-l">Routes Found</div></div>
+          <div class="ans-k"><div class="ans-v">69 km</div>
+            <div class="ans-l">Avg Length</div></div>
+          <div class="ans-k"><div class="ans-v">25.8 m</div>
+            <div class="ans-l">Avg Elev Drop</div></div>
+        </div>
+        <div class="subq">
+          <div class="subq-title">Why the animation starts at the barrage</div>
+          Water flows FROM the source (barrage) TO the sink. The animated dot always
+          originates at coords[0] of each GeoJSON LineString — the barrage end — and
+          travels toward coords[last] — the sink. Progress=0 means water just left
+          the barrage; progress=1 means it reached the storage sink.
+          <span class="ans-tag info">Origin-correct animation</span>
+        </div>`
+    }
+  },
+  {
+    num:'SQ3',
+    title:'How does the flood wave propagate over time?',
+    sub:'Hourly simulation · gravity-driven spreading · 4 calibrated scenarios',
+    answer:{
+      title:'Sub-Query 3 — Temporal Flood Dynamics',
+      desc:'Gravity-driven transfer between adjacent hexagonal cells, parameterised ' +
+           'by 4 real flood scenarios calibrated against Sentinel-1 SAR.',
+      body:`
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v">Normal</div>
+            <div class="ans-l">150mm · 5K cusecs</div></div>
+          <div class="ans-k"><div class="ans-v">2020</div>
+            <div class="ans-l">280mm · 11.5K cusecs</div></div>
+          <div class="ans-k"><div class="ans-v">Extreme</div>
+            <div class="ans-l">400mm · 15K cusecs</div></div>
+          <div class="ans-k"><div class="ans-v">Worst</div>
+            <div class="ans-l">500mm · 20K cusecs</div></div>
+        </div>`
+    }
+  },
+  {
+    num:'SQ4',
+    title:'How accurate is the ML suitability model?',
+    sub:'LightGBM · ROC-AUC 0.8195 · 4 Sentinel-1 SAR flood events',
+    answer:{
+      title:'Sub-Query 4 — Model Validation & Performance',
+      desc:'ROC-AUC of 0.8195 — the model correctly ranks flooded vs non-flooded ' +
+           'hexagons 82% of the time.',
+      body:`
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v">0.8195</div>
+            <div class="ans-l">ROC-AUC</div></div>
+          <div class="ans-k"><div class="ans-v">4</div>
+            <div class="ans-l">Training Events</div></div>
+          <div class="ans-k"><div class="ans-v">6</div>
+            <div class="ans-l">Features Used</div></div>
+          <div class="ans-k"><div class="ans-v">LightGBM</div>
+            <div class="ans-l">Algorithm</div></div>
+        </div>
+        <div class="subq"><div class="subq-title">CartoDEM geoid correction</div>
+          +69.7m added to delta tiles where elev &lt; 0. Without this all routing fails —
+          Dijkstra sees the delta as tens of metres below the river.
+          <span class="ans-tag info">Geoid Fix</span>
+        </div>`
+    }
+  },
+  {
+    num:'SQ5',
+    title:'What is the total storage capacity available?',
+    sub:'Sink classification · capacity modelling · filling simulation',
+    answer:{
+      title:'Sub-Query 5 — Storage Capacity Assessment',
+      desc:'Sinks classified as Large (≥0.85), Medium (0.70–0.85), Small (<0.70). ' +
+           'Filling tracked per sink during simulation.',
+      body:`
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v" style="color:#1d4ed8">Large</div>
+            <div class="ans-l">suit ≥ 0.85</div></div>
+          <div class="ans-k"><div class="ans-v" style="color:#d97706">Medium</div>
+            <div class="ans-l">0.70–0.85</div></div>
+          <div class="ans-k"><div class="ans-v" style="color:#64748b">Small</div>
+            <div class="ans-l">&lt;0.70</div></div>
+        </div>`
+    }
+  },
+  {
+    num:'SQ6',
+    title:'What data sources power the entire pipeline?',
+    sub:'CartoDEM · Sentinel-1 SAR · WorldPop · ESA LULC · GPM IMERG · HydroRIVERS',
+    answer:{
+      title:'Sub-Query 6 — Data Sources & Processing Pipeline',
+      desc:'10 geospatial datasets across raster, vector, and NetCDF formats — ' +
+           'all reprojected to EPSG:32644 at 10m resolution.',
+      body:`
+        <div class="ans-kpi">
+          <div class="ans-k"><div class="ans-v">10</div>
+            <div class="ans-l">Datasets</div></div>
+          <div class="ans-k"><div class="ans-v">10 m</div>
+            <div class="ans-l">Base Resolution</div></div>
+          <div class="ans-k"><div class="ans-v">EPSG:32644</div>
+            <div class="ans-l">CRS (UTM 44N)</div></div>
+        </div>`
+    }
+  },
+];
+
+// ── ANALYTICS ──────────────────────────────────────────────────────────────────
+async function loadAnalytics(){
+  try{
+    const res  = await fetch('/api/analytics');
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const a    = (json.success !== undefined) ? json.data : json;
+    if(!a) throw new Error('Empty analytics response');
+    G.analytics = a;
+    renderAnalytics(a);
+    renderQueries(a);
+  }catch(e){
+    console.error('Analytics error:', e);
+    document.getElementById('analytics-content').innerHTML=`
+      <div style="grid-column:span 3;text-align:center;padding:40px;color:#dc2626">
+        <div style="font-size:24px;margin-bottom:8px">&#9888;</div>
+        <div style="font-weight:700;margin-bottom:4px">Analytics Error</div>
+        <div style="font-size:11px;color:#64748b">${e.message}</div>
+      </div>`;
+  }
+}
+
+function renderAnalytics(a){
+  const ml   = a.ml_model        || {};
+  const suit = a.suitability     || {};
+  const elev = a.elevation       || {};
+  const pop  = a.population      || {};
+  const rts  = a.routes          || {};
+  const sk   = a.sinks           || {};
+  const ds   = a.data_sources    || [];
+  const fl   = ml.flood_labels         || [];
+  const fi   = ml.feature_importance   || {};
+
+  const fiRows = Object.entries(fi)
+    .sort((x,y)=>y[1]-x[1])
+    .map(([k,v])=>`
+      <div class="feat-bar-row">
+        <div class="feat-name">${k}</div>
+        <div class="feat-track">
+          <div class="feat-fill" style="width:${Math.round(v*100)}%"></div>
+        </div>
+        <div class="feat-pct">${Math.round(v*100)}%</div>
+      </div>`).join('');
+
+  const flRows = fl.map(f=>`
+    <div class="flood-event">
+      <div class="fe-dot" style="background:${f.color}"></div>
+      <div>
+        <div class="fe-title">${f.year} — ${f.type}</div>
+        <div class="fe-desc">${f.source}</div>
+      </div>
+    </div>`).join('');
+
+  const dsRows = ds.map(d=>`
+    <div class="data-src">
+      <div>
+        <div class="ds-name">${d.name}</div>
+        <div class="ds-desc">${d.type} &mdash; ${d.use}</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('analytics-content').innerHTML=`
+    <div class="acard">
+      <div class="query-badge">MAIN QUERY</div>
+      <div class="acard-title">Model Performance</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-val">${ml.roc_auc||0.8195}</div>
+          <div class="kpi-lbl">ROC-AUC</div></div>
+        <div class="kpi"><div class="kpi-val">${ml.training_events||4}</div>
+          <div class="kpi-lbl">Flood Events</div></div>
+        <div class="kpi"><div class="kpi-val">${Object.keys(fi).length}</div>
+          <div class="kpi-lbl">Features Used</div></div>
+      </div>
+      <div style="font-size:9px;color:#64748b;line-height:1.5;margin-top:4px">
+        <b>Model:</b> ${ml.model||'LightGBM'}<br>
+        <b>Formula:</b> ${ml.suitability_formula||'Flood_Prob × (1-Pop) × (1-Urban)'}
+      </div>
+    </div>
+
+    <div class="acard">
+      <div class="query-badge">SQ 1</div>
+      <div class="acard-title">Storage Suitability Zones</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-val" style="color:#16a34a">
+          ${(suit.high||0).toLocaleString()}</div>
+          <div class="kpi-lbl">High (≥0.85)</div></div>
+        <div class="kpi"><div class="kpi-val" style="color:#d97706">
+          ${(suit.medium||0).toLocaleString()}</div>
+          <div class="kpi-lbl">Medium</div></div>
+        <div class="kpi"><div class="kpi-val" style="color:#dc2626">
+          ${(suit.low||0).toLocaleString()}</div>
+          <div class="kpi-lbl">Low (&lt;0.70)</div></div>
+      </div>
+    </div>
+
+    <div class="acard">
+      <div class="query-badge">SQ 2 — DEM ANOMALY</div>
+      <div class="acard-title">Elevation &amp; Geoid Correction</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-val" style="color:#dc2626">
+          ${elev.pre_geoid_median||-54.8}m</div>
+          <div class="kpi-lbl">Pre-correction</div></div>
+        <div class="kpi"><div class="kpi-val" style="color:#16a34a">
+          +${elev.geoid_correction||69.7}m</div>
+          <div class="kpi-lbl">Geoid Fix</div></div>
+        <div class="kpi"><div class="kpi-val" style="color:#2563eb">
+          ${elev.post_geoid_median||15.6}m</div>
+          <div class="kpi-lbl">Post-correction</div></div>
+      </div>
+    </div>
+
+    <div class="acard">
+      <div class="query-badge">SQ 3</div>
+      <div class="acard-title">Population Exposure</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-val">
+          ${pop.total ? Math.round(pop.total/1000)+'K' : 'N/A'}</div>
+          <div class="kpi-lbl">Total (nodes)</div></div>
+        <div class="kpi"><div class="kpi-val" style="color:#dc2626">
+          ${pop.high_risk_pct||0}%</div>
+          <div class="kpi-lbl">High Risk Zone</div></div>
+        <div class="kpi"><div class="kpi-val" style="color:#16a34a">
+          ${pop.zero_pop_sinks||0}</div>
+          <div class="kpi-lbl">Zero-pop Sinks</div></div>
+      </div>
+    </div>
+
+    <div class="acard">
+      <div class="query-badge">SQ 4</div>
+      <div class="acard-title">Route Optimisation (Dijkstra)</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-val">${rts.total||0}</div>
+          <div class="kpi-lbl">Routes</div></div>
+        <div class="kpi"><div class="kpi-val">${rts.avg_length_km||69} km</div>
+          <div class="kpi-lbl">Avg Length</div></div>
+        <div class="kpi"><div class="kpi-val">${rts.avg_elev_drop_m||25.8}m</div>
+          <div class="kpi-lbl">Elev Drop</div></div>
+      </div>
+      <div style="font-size:9px;color:#64748b;margin-top:4px">
+        ${rts.graph_nodes ? rts.graph_nodes.toLocaleString() : '342,573'} hex nodes
+        &middot; ${rts.algorithm||'Undirected Dijkstra LCP'}
+      </div>
+    </div>
+
+    <div class="acard">
+      <div class="query-badge">SQ 5</div>
+      <div class="acard-title">Storage Sink Capacity</div>
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-val">${sk.total||0}</div>
+          <div class="kpi-lbl">Total Sinks</div></div>
+        <div class="kpi"><div class="kpi-val">${sk.total_capacity||0}</div>
+          <div class="kpi-lbl">Total Cap.</div></div>
+        <div class="kpi"><div class="kpi-val">${sk.avg_suitability||0}</div>
+          <div class="kpi-lbl">Avg Suit.</div></div>
+      </div>
+      <div style="font-size:9px;color:#64748b;margin-top:4px">
+        Large: <b>${sk.large||0}</b> &nbsp;
+        Medium: <b>${sk.medium||0}</b> &nbsp;
+        Small: <b>${sk.small||0}</b>
+      </div>
+    </div>
+
+    <div class="acard acard-big">
+      <div class="query-badge">ML MODEL — LightGBM</div>
+      <div class="acard-title">
+        Feature Importance — What Drives Flood Suitability?</div>
+      ${fiRows||'<div style="color:#94a3b8;font-size:10px">No feature data</div>'}
+      <div style="font-size:9px;color:#64748b;margin-top:8px;padding-top:8px;
+                  border-top:1px solid #f1f5f9">
+        <b>TWI formula:</b> ${ml.twi_formula||'ln(FlowAcc / tan(Slope))'}
+        &nbsp;|&nbsp;
+        <b>LULC encoding:</b> ${ml.lulc_encoding||'One-Hot'}
+        &nbsp;|&nbsp;
+        <b>Dropped:</b> ${(ml.features_dropped||[]).join(', ')}
+      </div>
+    </div>
+
+    <div class="acard">
+      <div class="acard-title">Training Flood Events (Sentinel-1 SAR)</div>
+      ${flRows||'<div style="color:#94a3b8;font-size:10px">No event data</div>'}
+    </div>
+
+    <div class="acard">
+      <div class="acard-title">Data Sources Used (${ds.length} datasets)</div>
+      ${dsRows||'<div style="color:#94a3b8;font-size:10px">No source data</div>'}
+    </div>
+  `;
+}
+
+function renderQueries(a){
+  const list = document.getElementById('q-list');
+  if(!list) return;
+  list.innerHTML = QUERIES.map((q,i)=>`
+    <div class="q-item" onclick="showQuery(${i},this)">
+      <div class="q-num">${q.num}</div>
+      <div class="q-text">${q.title}</div>
+      <div class="q-sub">${q.sub}</div>
+    </div>`).join('');
+}
+
+function showQuery(i, el){
+  document.querySelectorAll('.q-item').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  const q = QUERIES[i];
+  document.getElementById('q-answer').innerHTML=`
+    <div class="qa-title">${q.answer.title}</div>
+    <div class="qa-desc">${q.answer.desc}</div>
+    <div class="qa-body">${q.answer.body}</div>`;
+}
+</script>
+</body>
+</html>
